@@ -249,18 +249,30 @@
                 return `//*[@id='${element.id}']`;
             }
             
-            // Try to use unique class if available
+            // Try to use class name
             if (element.className) {
-                const classes = element.className.split(/\s+/);
-                for (const className of classes) {
-                    const elements = document.getElementsByClassName(className);
-                    if (elements.length === 1) {
-                        return `//*[contains(@class, '${className}')]`;
+                const classes = element.className.split(/\s+/).filter(c => c.trim());
+                if (classes.length > 0) {
+                    // Try with all classes first
+                    const classSelector = classes.map(c => `contains(@class, '${c}')`).join(' and ');
+                    const fullClassQuery = `//*[${classSelector}]`;
+                    const elements = document.evaluate(fullClassQuery, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                    if (elements.snapshotLength === 1) {
+                        return fullClassQuery;
+                    }
+                    
+                    // Try individual classes
+                    for (const className of classes) {
+                        const singleClassQuery = `//*[contains(@class, '${className}')]`;
+                        const singleElements = document.evaluate(singleClassQuery, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                        if (singleElements.snapshotLength === 1) {
+                            return singleClassQuery;
+                        }
                     }
                 }
             }
             
-            // Generate path based on element hierarchy with position
+            // Generate path based on element hierarchy with position and attributes
             const paths = [];
             while (element !== document.body && element.parentNode) {
                 let nodeName = element.nodeName.toLowerCase();
@@ -274,11 +286,20 @@
                     }
                 }
                 
+                // Try to add distinguishing attributes
+                let attributes = '';
+                if (element.className) {
+                    const mainClass = element.className.split(/\s+/)[0];
+                    attributes = `[contains(@class, '${mainClass}')]`;
+                }
+                
                 // Add node to path
-                if (position === 1) {
+                if (position === 1 && !attributes) {
                     paths.unshift(nodeName);
+                } else if (position === 1) {
+                    paths.unshift(nodeName + attributes);
                 } else {
-                    paths.unshift(`${nodeName}[${position}]`);
+                    paths.unshift(`${nodeName}${attributes}[${position}]`);
                 }
                 
                 element = element.parentNode;

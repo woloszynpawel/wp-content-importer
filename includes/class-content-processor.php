@@ -8,30 +8,27 @@ class WP_Content_Importer_Content_Processor {
      */
     public function process($html, $selectors, $base_url) {
         if (empty($html) || empty($selectors)) {
+            error_log('WP Content Importer: Empty input data');
             return new WP_Error('invalid_input', __('Invalid input data.', 'wp-content-importer'));
         }
         
         // Debug info
-        error_log('Processing content with selectors: ' . print_r($selectors, true));
+        error_log('WP Content Importer: Processing content with selectors: ' . print_r($selectors, true));
         
         // Load HTML into DOMDocument
         libxml_use_internal_errors(true);
         $dom = new DOMDocument();
         
-        // Detect character encoding from meta tags or headers
-        $encoding = 'UTF-8';
-        if (preg_match('/<meta[^>]+charset=[\'"]*([^"\'>]+)/i', $html, $matches)) {
-            $encoding = $matches[1];
-        }
-        
-        // Convert HTML to UTF-8 if needed
-        if (strtoupper($encoding) !== 'UTF-8') {
-            $html = mb_convert_encoding($html, 'HTML-ENTITIES', $encoding);
-        }
+        // Convert HTML to UTF-8 and handle special characters
+        $html = mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8');
+        $html = '<?xml encoding="UTF-8">' . $html;
         
         // Load HTML with proper flags
-        $dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NOERROR | LIBXML_NOWARNING);
-        libxml_clear_errors();
+        $success = $dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NOERROR | LIBXML_NOWARNING);
+        if (!$success) {
+            error_log('WP Content Importer: Failed to load HTML');
+            return new WP_Error('html_load_failed', __('Failed to load HTML content.', 'wp-content-importer'));
+        }
         
         $xpath = new DOMXPath($dom);
         
@@ -46,70 +43,81 @@ class WP_Content_Importer_Content_Processor {
         
         // Process title
         if (!empty($selectors['title'])) {
-            error_log('Processing title with selector: ' . $selectors['title']);
-            $title_nodes = $xpath->query($selectors['title']);
-            if ($title_nodes && $title_nodes->length > 0) {
-                $title_text = trim($title_nodes->item(0)->textContent);
-                if (!empty($title_text)) {
-                    $content['title'] = $title_text;
-                    error_log('Found title: ' . $content['title']);
+            error_log('WP Content Importer: Processing title with selector: ' . $selectors['title']);
+            try {
+                $title_nodes = $xpath->query($selectors['title']);
+                if ($title_nodes && $title_nodes->length > 0) {
+                    $title_text = trim($title_nodes->item(0)->textContent);
+                    if (!empty($title_text)) {
+                        $content['title'] = $title_text;
+                        error_log('WP Content Importer: Found title: ' . $content['title']);
+                    } else {
+                        error_log('WP Content Importer: Title node found but content is empty');
+                    }
                 } else {
-                    error_log('Title node found but content is empty');
+                    error_log('WP Content Importer: No nodes found for title selector');
                 }
-            } else {
-                error_log('No nodes found for title selector: ' . $selectors['title']);
+            } catch (Exception $e) {
+                error_log('WP Content Importer: Error processing title: ' . $e->getMessage());
             }
         }
         
         // Process content
         if (!empty($selectors['content'])) {
-            error_log('Processing content with selector: ' . $selectors['content']);
-            $content_nodes = $xpath->query($selectors['content']);
-            if ($content_nodes && $content_nodes->length > 0) {
-                $content_node = $content_nodes->item(0);
-                $content_html = $dom->saveHTML($content_node);
-                if (!empty($content_html)) {
-                    $content['content'] = $this->process_content_html($content_html, $base_url);
-                    error_log('Found content length: ' . strlen($content['content']));
-                    
-                    // Validate content is not just whitespace
-                    if (trim(strip_tags($content['content'])) === '') {
-                        error_log('Content appears to be empty after stripping tags');
-                        $content['content'] = '';
+            error_log('WP Content Importer: Processing content with selector: ' . $selectors['content']);
+            try {
+                $content_nodes = $xpath->query($selectors['content']);
+                if ($content_nodes && $content_nodes->length > 0) {
+                    $content_node = $content_nodes->item(0);
+                    $content_html = $dom->saveHTML($content_node);
+                    if (!empty($content_html)) {
+                        $content['content'] = $this->process_content_html($content_html, $base_url);
+                        error_log('WP Content Importer: Found content length: ' . strlen($content['content']));
+                    } else {
+                        error_log('WP Content Importer: Content node found but HTML is empty');
                     }
                 } else {
-                    error_log('Content node found but HTML is empty');
+                    error_log('WP Content Importer: No nodes found for content selector');
                 }
-            } else {
-                error_log('No nodes found for content selector: ' . $selectors['content']);
+            } catch (Exception $e) {
+                error_log('WP Content Importer: Error processing content: ' . $e->getMessage());
             }
         }
         
         // Process featured image
         if (!empty($selectors['featured_image'])) {
-            $featured_image_nodes = $xpath->query($selectors['featured_image']);
-            if ($featured_image_nodes && $featured_image_nodes->length > 0) {
-                $img_node = $featured_image_nodes->item(0);
-                if ($img_node->nodeName === 'img') {
-                    $src = $img_node->getAttribute('src');
-                    $content['featured_image'] = $this->resolve_url($src, $base_url);
-                } else {
-                    // Try to find img inside the node
-                    $img_subnodes = $xpath->query('.//img', $img_node);
-                    if ($img_subnodes && $img_subnodes->length > 0) {
-                        $src = $img_subnodes->item(0)->getAttribute('src');
+            error_log('WP Content Importer: Processing featured image with selector: ' . $selectors['featured_image']);
+            try {
+                $img_nodes = $xpath->query($selectors['featured_image']);
+                if ($img_nodes && $img_nodes->length > 0) {
+                    $img_node = $img_nodes->item(0);
+                    if ($img_node->nodeName === 'img') {
+                        $src = $img_node->getAttribute('src');
                         $content['featured_image'] = $this->resolve_url($src, $base_url);
+                        error_log('WP Content Importer: Found featured image: ' . $content['featured_image']);
+                    } else {
+                        // Try to find img inside the node
+                        $img_subnodes = $xpath->query('.//img', $img_node);
+                        if ($img_subnodes && $img_subnodes->length > 0) {
+                            $src = $img_subnodes->item(0)->getAttribute('src');
+                            $content['featured_image'] = $this->resolve_url($src, $base_url);
+                            error_log('WP Content Importer: Found featured image (nested): ' . $content['featured_image']);
+                        }
                     }
+                } else {
+                    error_log('WP Content Importer: No nodes found for featured image selector');
                 }
+            } catch (Exception $e) {
+                error_log('WP Content Importer: Error processing featured image: ' . $e->getMessage());
             }
         }
         
-        // Process category
-        if (!empty($selectors['category'])) {
-            $category_nodes = $xpath->query($selectors['category']);
-            if ($category_nodes && $category_nodes->length > 0) {
-                $content['category'] = $category_nodes->item(0)->textContent;
-            }
+        // Validate extracted content
+        if (empty($content['title']) || empty($content['content'])) {
+            error_log('WP Content Importer: Failed to extract required content');
+            error_log('WP Content Importer: Title length: ' . strlen($content['title']));
+            error_log('WP Content Importer: Content length: ' . strlen($content['content']));
+            return new WP_Error('extraction_failed', __('Failed to extract content. Please verify your selectors.', 'wp-content-importer'));
         }
         
         return $content;

@@ -1,17 +1,17 @@
 <?php
 /**
  * Plugin Name: WP Content Importer
- * Plugin URI: https://github.com/pawelwoloszyn/wp-content-importer
+ * Plugin URI: https://github.com/woloszynpawel/wp-content-importer
  * Description: Import content from other websites into WordPress with visual selector.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Pawel Woloszyn
- * Author URI: https://github.com/pawelwoloszyn
+ * Author URI: https://github.com/woloszynpawel
  * Text Domain: wp-content-importer
  * Domain Path: /languages
  * License: GPL v2 or later
  * Requires at least: 5.8
  * Requires PHP: 7.4
- * Update URI: https://github.com/pawelwoloszyn/wp-content-importer
+ * Update URI: https://github.com/woloszynpawel/wp-content-importer
  */
 
 // Prevent direct access
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WP_CONTENT_IMPORTER_VERSION', '1.0.0');
+define('WP_CONTENT_IMPORTER_VERSION', '1.0.1');
 define('WP_CONTENT_IMPORTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WP_CONTENT_IMPORTER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
