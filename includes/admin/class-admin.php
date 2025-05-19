@@ -59,6 +59,16 @@ class WP_Content_Importer_Admin {
             'wp-content-importer-queue',
             array($this, 'render_queue_page')
         );
+
+        // Add Debug page
+        add_submenu_page(
+            'wp-content-importer',
+            __('Debug', 'wp-content-importer'),
+            __('Debug', 'wp-content-importer'),
+            'manage_options',
+            'wp-content-importer-debug',
+            array($this, 'render_debug_page')
+        );
     }
     
     /**
@@ -119,6 +129,55 @@ class WP_Content_Importer_Admin {
      */
     public function render_queue_page() {
         require_once WP_CONTENT_IMPORTER_PLUGIN_DIR . 'includes/admin/views/queue-page.php';
+    }
+    
+    /**
+     * Render debug page
+     */
+    public function render_debug_page() {
+        // Handle form submission
+        if (isset($_POST['test_selectors']) && check_admin_referer('wp_content_importer_test_selectors')) {
+            $url = isset($_POST['test_url']) ? esc_url_raw($_POST['test_url']) : '';
+            $selectors = isset($_POST['selectors']) ? array_map('sanitize_text_field', $_POST['selectors']) : array();
+            
+            if (!empty($url) && !empty($selectors)) {
+                // Get content from URL
+                $response = wp_remote_get($url);
+                
+                if (!is_wp_error($response)) {
+                    $html = wp_remote_retrieve_body($response);
+                    
+                    // Process content
+                    $processor = new WP_Content_Importer_Content_Processor();
+                    $result = $processor->process($html, $selectors, $url);
+                    
+                    if (!is_wp_error($result)) {
+                        add_settings_error(
+                            'wp_content_importer_messages',
+                            'test_success',
+                            __('Test successful! Check the error log for details.', 'wp-content-importer'),
+                            'updated'
+                        );
+                    } else {
+                        add_settings_error(
+                            'wp_content_importer_messages',
+                            'test_failed',
+                            $result->get_error_message(),
+                            'error'
+                        );
+                    }
+                } else {
+                    add_settings_error(
+                        'wp_content_importer_messages',
+                        'fetch_failed',
+                        $response->get_error_message(),
+                        'error'
+                    );
+                }
+            }
+        }
+        
+        require_once WP_CONTENT_IMPORTER_PLUGIN_DIR . 'includes/admin/views/debug-page.php';
     }
     
     /**
