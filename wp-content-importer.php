@@ -19,6 +19,9 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Make sure we have access to WordPress functions
+require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+
 // Define plugin constants
 define('WP_CONTENT_IMPORTER_VERSION', '1.0.1');
 define('WP_CONTENT_IMPORTER_PLUGIN_DIR', plugin_dir_path(__FILE__));
@@ -30,7 +33,12 @@ require_once WP_CONTENT_IMPORTER_PLUGIN_DIR . 'includes/class-updater.php';
 
 // Initialize the updater
 if (is_admin()) {
-    new WP_Content_Importer_Updater(__FILE__);
+    error_log('WP Content Importer: Initializing in admin context');
+    $updater = new WP_Content_Importer_Updater(__FILE__);
+    
+    // Force update check
+    delete_site_transient('update_plugins');
+    wp_update_plugins();
 }
 
 // Initialize the plugin
@@ -44,10 +52,12 @@ add_action('plugins_loaded', 'wp_content_importer_init');
 register_activation_hook(__FILE__, 'wp_content_importer_activate');
 function wp_content_importer_activate() {
     // Activation tasks (create necessary database tables, etc.)
+    error_log('WP Content Importer: Plugin activated');
 }
 
 // Deactivation hook
 register_deactivation_hook(__FILE__, 'wp_content_importer_deactivate');
 function wp_content_importer_deactivate() {
     // Deactivation tasks
+    error_log('WP Content Importer: Plugin deactivated');
 } 
